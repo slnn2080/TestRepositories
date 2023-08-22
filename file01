@@ -1,0 +1,2 @@
+0822 我想测试下 当我使用 git pull origin testpull0822 命令的时候 
+会不会 会将该分支的代码 先下载到 master 上 然后再切换到 testpull0822
