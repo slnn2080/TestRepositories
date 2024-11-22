@@ -141,7 +141,162 @@ B分支先合并到 master分支 上 结果如下
 
 <br>
 
-### 根据 测试1 和 测试2 的解决方式:
+### 根据 测试1 和 测试2 的解决方式: 在push前 先下拉远程的 master分支 代码到当前分支
+1. 我要在 master分支 上创建 memo 文件
+
+2. 基于 master分支 创建了 A分支 修改 memo 文件的 **第1行**
+  - git checkout -b A
+  - git add .
+  - git commit -m "A modify row1"
+  - git push origin A
+
+3. 然后 我要在A分支后 创建B分支 修改 memo 文件的 **第1行**
+  - git checkout -b B
+  - git add .
+  - git commit -m "B modify row10"
+  - git push -u origin B
+
+4. github的操作
+  - 创建 B分支 合并到 master分支 的 pr
+  - 将 B分支 合并到 master分支 上 **(优先合并了B分支)**
+  - 删除合并后的 远程B分支
+
+5. 本地的操作
+  - 切换回 A分支
+  - 创建新文件 test
+  - 拉取远程最新代码到本地, 以防在github的冲突 ``git pull origin master``
+  - 报错
+
+<br>
+
+我们在下拉 ``origin/master`` 代码的时候, 如果 本地分支 和 远程的master分支 有 **分歧/分叉** 的话 **会出现下面的错误**
+
+**解释: 什么叫做分叉?**  
+A 分支和 master 分支之间发生了 分叉, 即它们的提交历史发生了分歧
+
+A 分支在本地进行了修改, 而 B 分支已经先在远程 master 中合并, 这意味着 master 分支已经包含了 B 分支的更改, 但是 A 分支仍然基于一个较旧的 master 分支, 所以它与远程 master 分支有不同的提交历史。
+
+你的本地 A 分支和远程的 master 分支由于不同的提交历史（B 分支已合并到 master, 而 A 分支没有同步）发生了分叉。Git 无法自动合并它们, 因为它不知道如何处理这种分叉, 特别是 A 分支和 master 之间的冲突。你需要手动合并这两个分支并解决冲突
+
+<br>
+
+**出现的错误:**  
+```s
+git pull origin master
+  
+remote: Enumerating objects: 1, done.
+remote: Counting objects: 100% (1/1), done.
+remote: Total 1 (delta 0), reused 0 (delta 0), pack-reused 0 (from 0)
+Unpacking objects: 100% (1/1), 889 bytes | 889.00 KiB/s, done.
+From github.com:slnn2080/TestRepositories
+* branch            master     -> FETCH_HEAD
+  47ed0ac..2266d45  master     -> origin/master
+hint: You have divergent branches and need to specify how to reconcile them.
+hint: You can do so by running one of the following commands sometime before
+hint: your next pull:
+hint: 
+hint:   git config pull.rebase false  # merge
+hint:   git config pull.rebase true   # rebase
+hint:   git config pull.ff only       # fast-forward only
+hint: 
+hint: You can replace "git config" with "git config --global" to set a default
+hint: preference for all repositories. You can also pass --rebase, --no-rebase,
+hint: or --ff-only on the command line to override the configured default per
+hint: invocation.
+fatal: Need to specify how to reconcile divergent branches.
+```
+
+这个错误提示表明你在尝试执行 git pull 时, Git 发现你本地的分支和远程的 master 分支有 分叉（divergent）, 即它们各自有不同的提交, 导致 Git 无法自动合并它们
+
+由于 B分支 已经合并到远程的 master 分支, 而本地的 A分支 还没有合并到远程的 master, 因此 分支发生了分叉, Git 无法自动决定如何将这两个分支合并
+
+<br>
+
+**解决方式:**  
+需要告诉 Git 如何处理这种分叉的情况, 具体有两种方式
+
+<br>
+
+**1. 合并（merge）**   
+如果你想将远程的 master 分支的修改合并到你的本地 A 分支, 使用合并的方式来解决分叉
+```s
+git config pull.rebase false  # 禁用rebase, 使用merge
+git pull origin master        # 拉取并合并
+```
+
+这样, Git 会执行一次 合并操作, 将远程的 master 分支的提交合并到你的本地 A 分支。如果有冲突, Git 会提示你手动解决冲突。
+
+<br>
+
+**2. 变基（rebase）**  
+如果你想让本地的提交放到远程 master 分支的最新提交之后（即重写历史）, 你可以选择 变基 操作。变基操作会将本地的提交 "重新播放" 到远程 master 分支的提交之后。
+
+```s
+git config pull.rebase true   # 启用rebase
+git pull origin master        # 执行rebase
+```
+
+这会将本地的 A 分支提交的修改应用到远程 master 分支的最新状态上。如果有冲突, Git 会提示你解决冲突, 并在解决冲突后继续变基。
+
+<br>
+
+**3. 只允许快进合并（fast-forward only）**  
+如果在 feature 分支上工作后, master 分支没有任何新的提交（**也就是说, master 分支与 feature 分支没有任何分歧**）, 我们希望只有在这种状态下才可以合并, 可以使用以下命令：
+```s
+git config pull.ff only        # 仅允许快进合并
+git pull origin master         # 拉取远程 master 分支
+```
+
+<br>
+
+**3种策略 哪种好?**  
+推荐使用 merge
+
+因为变基会重写历史, 在多人协作时可能带来问题
+
+<br>
+
+**上面的3种方式 会修改配置文件 影响到当前的仓库 如何避免:**  
+- 如果想使用 meger策略: ``git pull --no-rebase origin master``
+- 如果想使用 rebase策略: ``git pull --rebase origin master``
+
+<br>
+
+**解决冲突后 如何处理:**  
+- 如果是 **meger** 策略
+  - git add .
+  - git commit -m ""
+  - git push origin B
+
+- 如果是 **rebase** 策略
+  - git add .
+  - git rebase --continue
+  - git push --force-with-lease / git push --force
+  ```s
+  # 最后, 由于你进行了 rebase 操作, Git 的提交历史被修改, 所以你需要强制推送（--force 或 --force-with-lease）到远程分支
+  --force-with-lease 比 --force 更安全, 它可以确保推送时远程分支没有被其他人修改过
+  ```
+
+<br>
+
+**如果你不小心启用了 git config pull.ff only 并希望将配置还原到最初的状态 操作如下:**  
+1. 恢复 Git 配置为默认行为
+```s
+# 如果你只想取消 pull.ff 配置，可以使用以下命令
+git config --unset pull.ff
+```
+
+2. 确保正确配置
+```s
+# 如果输出为空，则表示 pull.ff 配置已被成功删除，Git 会恢复到默认行为（允许非快进合并）
+git config --get pull.ff
+```
+
+3. 扩展: 查看全局和局部配置
+```s
+git config --global --get pull.ff
+git config --get pull.ff
+```
 
 <br>
 
